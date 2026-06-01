@@ -24,6 +24,18 @@ Alert (Grafana webhook) ──► FastAPI ──► LangGraph Orchestrator
                                      Incident Report
 ```
 
+## Documentation
+
+| Document | Description |
+|---|---|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture, data flow, design decisions |
+| [docs/api.md](docs/api.md) | Full API reference (endpoints, request/response shapes, errors) |
+| [docs/development.md](docs/development.md) | Developer guide (setup, conventions, testing, adding agents) |
+| [docs/deployment.md](docs/deployment.md) | Deployment guide (Docker, K8s, Helm, CI/CD, env vars) |
+| [AGENTS.md](AGENTS.md) | AI assistant context (commands, conventions, decisions) |
+| [DEMO.md](DEMO.md) | 5-minute demo script |
+| [TODO.md](TODO.md) | Roadmap and known issues |
+
 ## Stack
 
 | Component | Technology |

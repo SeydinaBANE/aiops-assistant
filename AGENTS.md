@@ -33,6 +33,13 @@ make docker-up   # Start full stack
 - mypy strict over pyright (stricter defaults)
 - distroless Docker image over slim (smaller attack surface)
 
+## Documentation
+
+- [ARCHITECTURE.md](ARCHITECTURE.md) — system design
+- [docs/api.md](docs/api.md) — API reference
+- [docs/development.md](docs/development.md) — developer how-to
+- [docs/deployment.md](docs/deployment.md) — deployment how-to
+
 ## Session notes
 
 Create the project at `/Users/baneseydina/Desktop/app/aiops-assistant`.
