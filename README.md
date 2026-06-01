@@ -1,5 +1,12 @@
 # AIOps Assistant
 
+![Python](https://img.shields.io/badge/python-3.12-blue)
+![CI](https://github.com/SeydinaBANE/aiops-assistant/actions/workflows/ci.yml/badge.svg)
+![Docker](https://img.shields.io/badge/docker-multi--stage-2496ED?logo=docker)
+![License](https://img.shields.io/badge/license-MIT-green)
+![GitHub last commit](https://img.shields.io/github/last-commit/SeydinaBANE/aiops-assistant)
+![GitHub repo size](https://img.shields.io/github/repo-size/SeydinaBANE/aiops-assistant)
+
 Multi-agent incident investigator for IT operations. Automates the detection, investigation, and remediation of infrastructure incidents using LLMs and RAG.
 
 ## Architecture
@@ -107,6 +114,10 @@ helm/                         # Kubernetes Helm chart
 k8s/                          # Kind cluster config
 data/runbooks/                # Mock IT runbooks
 ```
+
+## Topics
+
+`aiops` · `incident-management` · `langgraph` · `rag` · `fastapi` · `opentelemetry` · `qdrant` · `docker` · `kubernetes` · `helm`
 
 ## License
 
