@@ -1,0 +1,38 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/baneseydina/aiops-assistant
+  tag: latest
+  pullPolicy: Always
+
+config:
+  apiHost: "0.0.0.0"
+  apiPort: 8000
+  apiLogLevel: "INFO"
+  llmModel: "openai/gpt-4o-mini"
+  qdrantHost: "qdrant"
+  qdrantPort: 6333
+  otelEndpoint: "http://otel-collector:4318"
+
+env:
+  - name: OPENROUTER_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: aiops-assistant
+        key: OPENROUTER_API_KEY
+
+service:
+  type: ClusterIP
+  port: 8000
+
+ingress:
+  enabled: false
+  host: aiops.local
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi

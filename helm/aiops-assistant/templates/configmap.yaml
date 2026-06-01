@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "aiops-assistant.fullname" . }}-config
+  labels: {{ include "aiops-assistant.labels" . | nindent 4 }}
+data:
+  API_HOST: {{ .Values.config.apiHost | quote }}
+  API_PORT: {{ .Values.config.apiPort | quote }}
+  API_LOG_LEVEL: {{ .Values.config.apiLogLevel | quote }}
+  LLM_MODEL: {{ .Values.config.llmModel | quote }}
+  QDRANT_HOST: {{ .Values.config.qdrantHost | quote }}
+  QDRANT_PORT: {{ .Values.config.qdrantPort | quote }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.config.otelEndpoint | quote }}

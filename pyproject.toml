@@ -1,0 +1,88 @@
+[project]
+name = "aiops-assistant"
+version = "0.1.0"
+description = "Agentic incident investigator — multi-agent AI for IT Ops"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.34,<1",
+    "langgraph>=0.3,<1",
+    "langchain-core>=0.3,<1",
+    "openai>=1.0,<2",
+    "qdrant-client>=1.13,<2",
+    "sentence-transformers>=3.4,<4",
+    "pydantic-settings>=2.7,<3",
+    "pydantic>=2.10,<3",
+    "opentelemetry-api>=1.30,<2",
+    "opentelemetry-sdk>=1.30,<2",
+    "opentelemetry-instrumentation-fastapi>=0.53b,<1",
+    "httpx>=0.28,<1",
+    "structlog>=25.1,<26",
+    "opentelemetry-exporter-otlp-proto-http>=1.30",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8,<9",
+    "pytest-asyncio>=0.25,<1",
+    "pytest-cov>=6,<7",
+    "ruff>=0.9,<1",
+    "mypy>=1.15,<2",
+    "pre-commit>=4,<5",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "D100", "D101", "D102", "D103", "D104", "D105", "D106", "D107",  # no docstrings — code is self-documenting
+    "COM812",  # trailing comma
+    "ERA001",  # commented-out code (config comments)
+    "S104",    # binding to 0.0.0.0 is intentional
+    "ARG001",  # unused func args (FastAPI lifespan signature)
+    "TRY300", "BLE001",  # exception handling in orchestrator
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "S101",    # allow assert
+    "ANN001", "ANN201", "ANN202",  # no type annotations in tests
+    "SLF001",  # allow access to private members
+    "ARG001", "ARG002",
+    "PLC0415",
+    "PLR2004",
+    "TC002", "TC003",
+    "INP001",
+]
+"scripts/**" = ["ANN001", "ANN201", "ANN202", "T201", "S310"]
+"conftest.py" = ["ANN001", "ANN201", "ANN202"]
+"src/__init__.py" = ["D100", "D104"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+disallow_untyped_defs = true
+disallow_any_unimported = true
+no_implicit_reexport = true
+
+[[tool.mypy.overrides]]
+module = ["opentelemetry.*", "qdrant_client.*", "sentence_transformers.*", "langgraph.*", "openai", "structlog"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*", "scripts.*"]
+ignore_errors = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-v --cov=src --cov-report=term-missing --cov-fail-under=80"
+
+[tool.bandit]
+exclude_dirs = ["tests", "scripts"]
