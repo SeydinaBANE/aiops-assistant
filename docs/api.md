@@ -6,7 +6,7 @@ Base URL: `http://localhost:8000`
 
 ### `POST /incidents`
 
-Create an incident from an alert. Triggers the multi-agent investigation pipeline.
+Create an incident from an alert. Triggers the multi-agent investigation pipeline. Returns the completed incident synchronously.
 
 **Request body:**
 
@@ -47,7 +47,7 @@ Create an incident from an alert. Triggers the multi-agent investigation pipelin
 }
 ```
 
-The investigation runs synchronously in the request handler. For long-running investigations (>30s), you would move this to a background task in production.
+The investigation runs synchronously in the request handler. For real-time streaming, use the WebSocket endpoint instead.
 
 ---
 
@@ -121,6 +121,54 @@ Get a single incident by ID.
 
 **Errors:**
 - `404 Not Found` — `{"detail": "Incident not found"}`
+
+---
+
+### `WS /ws/incidents`
+
+WebSocket endpoint for real-time investigation streaming. Opens a persistent connection, receives an alert, and pushes step-by-step progress as each agent completes.
+
+**Connection:**
+```javascript
+const ws = new WebSocket("ws://localhost:8000/ws/incidents");
+
+ws.onopen = () => {
+  ws.send(JSON.stringify({
+    title: "Disk Space Alert",
+    message: "Disk usage exceeded 90%.",
+    severity: "high",
+  }));
+};
+```
+
+**Client sends (once, after connection opens):**
+
+Same shape as `POST /incidents` request body.
+
+**Server pushes (JSON messages):**
+
+| Type | When | Payload |
+|---|---|---|
+| `investigating` | Investigation started | `{"type": "investigating", "incident_id": "a1b2..."}` |
+| `step` | Each agent completes | `{"type": "step", "step": {...}}` — same shape as step object above |
+| `complete` | All agents done | `{"type": "complete", "incident": {...}}` — same shape as list item |
+| `error` | Connection error | `{"type": "error", "message": "..."}` |
+
+**Example sequence:**
+
+```
+→ (client sends alert JSON)
+← {"type": "investigating", "incident_id": "abc123"}
+← {"type": "step", "step": {"agent_name": "logs", "status": "success", ...}}
+← {"type": "step", "step": {"agent_name": "knowledge", "status": "success", ...}}
+← {"type": "step", "step": {"agent_name": "remediation", "status": "success", ...}}
+← {"type": "complete", "incident": {"id": "abc123", "status": "resolved", ...}}
+```
+
+**Errors:**
+- Invalid JSON → `{"type": "error", "message": "Investigation failed"}`
+- WebSocket disconnect → server logs and stops
+- Agent failure → step status is `"error"`, pipeline continues with remaining agents
 
 ---
 

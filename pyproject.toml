@@ -87,3 +87,9 @@ addopts = "-v --cov=src --cov-report=term-missing --cov-fail-under=80"
 [tool.bandit]
 exclude_dirs = ["tests", "scripts"]
 skips = ["B104"]
+
+[dependency-groups]
+dev = [
+    "bandit>=1.9.4",
+    "safety>=3.8.1",
+]

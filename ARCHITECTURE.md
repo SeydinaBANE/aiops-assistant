@@ -2,40 +2,59 @@
 
 ## Overview
 
-AIOps Assistant is an event-driven system that ingests monitoring alerts, runs a multi-agent investigation pipeline orchestrated by LangGraph, and produces an incident report with root cause analysis and remediation steps.
+AIOps Assistant is an event-driven system that ingests monitoring alerts, runs a multi-agent investigation pipeline orchestrated by LangGraph, and produces an incident report with root cause analysis and remediation steps. Results are viewable via a React dashboard with real-time WebSocket streaming.
 
 ```
+                    ┌──────────────┐
+                    │   Browser    │
+                    │  (React SPA) │
+                    │ :80 (nginx)  │
+                    └──────┬───────┘
+                           │ HTTP /api/*
+                           │ WS    /ws/*
+                           ▼
 ┌─────────────┐     ┌──────────┐     ┌──────────────────────────────────────┐
 │   Grafana   │────▶│  FastAPI  │────▶│         LangGraph Pipeline           │
 │  Webhook    │     │ :8000    │     │  ┌──────┐  ┌──────────┐  ┌─────────┐ │
 └─────────────┘     └──────────┘     │  │ Logs │─▶│Knowledge │─▶│Remediat.│ │
-                                      │  │Agent │  │  Agent   │  │  Agent  │ │
-                                      │  └──────┘  └──────────┘  └─────────┘ │
-                                      └──────────┬───────────────────────────┘
-                                                  │
-                     ┌────────────────────────────┼────────────────────────────┐
-                     │                            │                            │
-                     ▼                            ▼                            ▼
-              ┌─────────────┐            ┌─────────────────┐          ┌──────────────┐
-              │  OpenRouter │            │  Qdrant (RAG)   │          │  OpenTelemetry│
-              │  LLM API   │            │  + embeddings   │          │  + Prometheus │
-              └─────────────┘            └─────────────────┘          └──────────────┘
+                                       │  │Agent │  │  Agent   │  │  Agent  │ │
+                                       │  └──────┘  └──────────┘  └─────────┘ │
+                                       └──────────┬───────────────────────────┘
+                                                   │
+                      ┌────────────────────────────┼────────────────────────────┐
+                      │                            │                            │
+                      ▼                            ▼                            ▼
+               ┌─────────────┐            ┌─────────────────┐          ┌──────────────┐
+               │  OpenRouter │            │  Qdrant (RAG)   │          │  OpenTelemetry│
+               │  LLM API   │            │  + embeddings   │          │  + Prometheus │
+               └─────────────┘            └─────────────────┘          └──────────────┘
 ```
 
 ## Components
 
 ### 1. API Layer (`src/api/`)
 
-FastAPI application with three endpoints:
+FastAPI application with REST and WebSocket endpoints:
 
-- `POST /incidents` — ingests an alert, spawns an async investigation, returns the incident
+- `POST /incidents` — ingests an alert, spawns an async investigation, returns the incident synchronously
 - `GET /incidents` — lists all incidents sorted by creation date (newest first)
 - `GET /incidents/{id}` — returns a single incident with its full investigation log
+- `WS /ws/incidents` — connects a WebSocket, receives an alert JSON, streams each investigation step in real time as it completes, then sends the final incident
 - `GET /health` — liveness probe for Docker/K8s
 
-Incidents are stored in-memory in a `dict[str, Incident]`. The API is stateless beyond this store; restarting clears all data. A production deployment would replace this with a database.
+Incidents are stored in-memory in a `dict[str, Incident]`. The WebSocket shares the same store and feeds the React dashboard with live step-by-step progress.
 
-### 2. Agent System (`src/agents/`)
+### 2. Frontend (`frontend/`)
+
+React single-page application built with Vite and Tailwind CSS:
+
+- **NewInvestigation** — form to submit an alert + live WebSocket timeline showing each agent's progress in real time (3 placeholders → check/cross per agent)
+- **IncidentsList** — fetches all incidents via `GET /incidents`, displays severity badges and status
+- **IncidentDetail** — full investigation log with step-by-step timeline, summary, and error display
+
+In development, Vite proxies `/api` and `/ws` to the FastAPI backend. In production, an nginx container serves the built SPA and reverse-proxies API and WebSocket requests.
+
+### 3. Agent System (`src/agents/`)
 
 Three agents implement the `Agent` protocol defined in `protocol.py`:
 
@@ -51,7 +70,7 @@ class Agent(Protocol):
 
 **RemediationAgent** — generates a step-by-step remediation plan using the LLM, conditioned on the incident severity (critical/high alerts get more urgent tone and explicit escalation steps).
 
-### 3. Orchestrator (`src/orchestrator/`)
+### 4. Orchestrator (`src/orchestrator/`)
 
 Uses LangGraph's `StateGraph` to define a sequential pipeline:
 
@@ -63,6 +82,7 @@ Each step is wrapped in an `AgentNode` that:
 1. Times the execution
 2. Catches exceptions and records them as error steps (the pipeline continues even if one agent fails)
 3. Adds the `InvestigationStep` to the incident's investigation log
+4. Optionally invokes a `step_callback` — used by the WebSocket handler to push progress to the client
 
 After the pipeline completes:
 - If all steps succeeded → incident is marked `RESOLVED` with a merged summary
@@ -70,7 +90,7 @@ After the pipeline completes:
 
 The state is a simple `TypedDict` with a single key `incident: Incident`.
 
-### 4. Domain Models (`src/domain/`)
+### 5. Domain Models (`src/domain/`)
 
 ```
 Alert ──────────────▶ Incident ──────────────▶ list[InvestigationStep]
@@ -82,7 +102,7 @@ Alert ──────────────▶ Incident ──────�
 - source              - investigation_log       - timestamp
 ```
 
-### 5. LLM Service (`src/services/llm.py`)
+### 6. LLM Service (`src/services/llm.py`)
 
 Lazy-initialized singleton client to OpenRouter's API:
 
@@ -92,7 +112,7 @@ client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=settings.openro
 
 The model and temperature are configurable via environment variables. Default model is `openai/gpt-4o-mini` with `temperature=0.1` (low — we want deterministic investigation results).
 
-### 6. Vector Store (`src/infrastructure/vector_store.py`)
+### 7. Vector Store (`src/infrastructure/vector_store.py`)
 
 Qdrant client with lazy initialization — the connection is established on first access, not at import time. This allows tests and scripts to import the module without running Qdrant.
 
@@ -104,7 +124,7 @@ Collection: "runbooks" (auto-created)
 
 The `ingest()` method encodes documents and upserts them as points. The `search()` method returns the top-k payloads (title + content + tags).
 
-### 7. Observability (`src/infrastructure/`)
+### 8. Observability (`src/infrastructure/`)
 
 **Logging** — structlog with two renderers:
 - JSON in production (structured, machine-parseable)
@@ -113,6 +133,8 @@ The `ingest()` method encodes documents and upserts them as points. The `search(
 **Tracing** — OpenTelemetry with OTLP HTTP exporter to an OpenTelemetry Collector, which forwards to Prometheus or any OTLP-compatible backend.
 
 ## Data Flow
+
+### REST (synchronous)
 
 ```
 1. User/script POSTs an alert to /incidents
@@ -125,6 +147,19 @@ The `ingest()` method encodes documents and upserts them as points. The `search(
 5. Pipeline completes → status = RESOLVED or FAILED
 6. Incident is stored in _incidents dict
 7. API returns the full IncidentResponse
+```
+
+### WebSocket (streaming)
+
+```
+1. React dashboard opens WS /ws/incidents
+2. Client sends alert JSON
+3. Server creates Incident, stores it, sends {type: "investigating", incident_id}
+4. For each agent:
+   - Agent runs investigation
+   - Server sends {type: "step", step: {...}} with the completed InvestigationStep
+5. All agents complete → server sends {type: "complete", incident: {...}}
+6. WebSocket closes
 ```
 
 ## Design Decisions
@@ -140,15 +175,19 @@ The `ingest()` method encodes documents and upserts them as points. The `search(
 | **Lazy VectorStore init** | Tests and CLI scripts can import the module without Qdrant running. Client connects on first property access. |
 | **Low LLM temperature (0.1)** | Investigation output should be deterministic and factual, not creative. |
 | **structlog over logging** | Structured output is essential for production observability. JSON logs integrate with Loki/ELK. JSON in production, pretty-print in dev. |
-| **Multi-stage Docker** | Builder stage compiles deps; runtime stage is minimal `python:3.12-slim` with non-root user — smaller image, smaller attack surface. |
+| **Multi-stage Docker (backend)** | Builder stage compiles deps; runtime stage is minimal `python:3.12-slim` with non-root user — smaller image, smaller attack surface. |
+| **Nginx reverse proxy (frontend)** | Single entry point (port 80) serves React SPA and proxies `/api` + `/ws` to FastAPI. WebSocket upgrade headers forwarded correctly. |
+| **Tailwind CSS v4** | Utility-first CSS, zero runtime, tree-shakable via PostCSS. No CDN dependency. |
+| **WebSocket callback in AgentNode** | Simple async callback pattern avoids coupling to LangGraph's streaming primitives. Easy to test — callbacks are optional and interchangeable. |
 | **OpenTelemetry + Prometheus** | Vendor-neutral observability. Collector buffers and retries; Prometheus provides long-term metrics storage. |
 
 ## Project Structure
 
 ```
 src/
-├── api/               # REST endpoints (routes.py, schemas.py)
+├── api/               # REST + WebSocket endpoints
 │   routes.py          # FastAPI router: POST/GET /incidents, /health
+│   websocket.py       # WebSocket handler: WS /ws/incidents
 │   schemas.py         # Pydantic request/response models
 ├── agents/            # Multi-agent system
 │   protocol.py        # Agent protocol (interface)
@@ -168,9 +207,19 @@ src/
 └── main.py            # FastAPI app with lifespan
 tests/
 ├── conftest.py        # Fixtures: client, mock_llm, sample_incident, mock_vector_store
-├── test_api/          # API endpoint tests
+├── test_api/          # API + WebSocket endpoint tests
 ├── test_agents/       # Agent unit tests (all 3 agents)
 └── test_orchestrator/ # LangGraph pipeline tests
+frontend/
+├── src/               # React SPA source
+│   pages/             # NewInvestigation, IncidentsList, IncidentDetail
+│   components/        # Layout, IncidentCard, StepTimeline
+│   api/               # REST + WebSocket client
+│   types/             # TypeScript types (mirrors Pydantic models)
+├── Dockerfile         # Multi-stage (Node build → nginx alpine)
+├── nginx.conf         # Reverse proxy to FastAPI backend
+├── package.json       # Vite + React + Tailwind + Router
+└── vite.config.ts     # Dev proxy to localhost:8000
 scripts/
 ├── seed_knowledge.py  # Seed Qdrant with runbooks
 └── simulate_alert.py  # POST mock alerts to the API
