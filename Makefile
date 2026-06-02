@@ -28,6 +28,17 @@ test:                                                                      ## Ru
 test-no-cov:                                                               ## Run tests without coverage (fast)
 	$(UV) pytest -x --no-cov
 
+# ── Frontend ─────────────────────────────────────────────────────────────────
+
+frontend-install:															## Install frontend dependencies
+	cd frontend && npm ci
+
+frontend-dev:																## Start frontend dev server
+	cd frontend && npm run dev
+
+frontend-build:																## Build frontend for production
+	cd frontend && npm ci && npm run build
+
 # ── Docker ──────────────────────────────────────────────────────────────────
 
 docker-build:                                                              ## Build production image

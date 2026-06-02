@@ -17,9 +17,15 @@ if TYPE_CHECKING:
 
 
 class AgentNode:
-    def __init__(self, name: str, investigate_fn: Callable[[Incident], Awaitable[InvestigationStep]]) -> None:
+    def __init__(
+        self,
+        name: str,
+        investigate_fn: Callable[[Incident], Awaitable[InvestigationStep]],
+        step_callback: Callable[[InvestigationStep], Awaitable[None]] | None = None,
+    ) -> None:
         self.name = name
         self._investigate = investigate_fn
+        self._callback = step_callback
 
     async def __call__(self, state: IncidentState) -> dict[str, Incident]:
         incident = state["incident"]
@@ -29,6 +35,8 @@ class AgentNode:
             elapsed = (time.perf_counter() - start) * 1000
             step.duration_ms = elapsed
             incident.add_step(step)
+            if self._callback:
+                await self._callback(step)
             return {"incident": incident}
         except Exception as exc:
             elapsed = (time.perf_counter() - start) * 1000
@@ -39,17 +47,22 @@ class AgentNode:
                 duration_ms=elapsed,
             )
             incident.add_step(step)
+            if self._callback:
+                await self._callback(step)
             return {"incident": incident}
 
 
 def build_graph(
-    logs_agent: Agent, knowledge_agent: Agent, remediation_agent: Agent
+    logs_agent: Agent,
+    knowledge_agent: Agent,
+    remediation_agent: Agent,
+    step_callback: Callable[[InvestigationStep], Awaitable[None]] | None = None,
 ) -> CompiledStateGraph[IncidentState]:
     workflow = StateGraph(IncidentState)
 
-    logs_node = AgentNode("logs", logs_agent.investigate)
-    knowledge_node = AgentNode("knowledge", knowledge_agent.investigate)
-    remediation_node = AgentNode("remediation", remediation_agent.investigate)
+    logs_node = AgentNode("logs", logs_agent.investigate, step_callback)
+    knowledge_node = AgentNode("knowledge", knowledge_agent.investigate, step_callback)
+    remediation_node = AgentNode("remediation", remediation_agent.investigate, step_callback)
 
     workflow.add_node("logs", logs_node)
     workflow.add_node("knowledge", knowledge_node)
@@ -68,8 +81,9 @@ async def run_investigation(
     logs_agent: Agent,
     knowledge_agent: Agent,
     remediation_agent: Agent,
+    step_callback: Callable[[InvestigationStep], Awaitable[None]] | None = None,
 ) -> Incident:
-    graph = build_graph(logs_agent, knowledge_agent, remediation_agent)
+    graph = build_graph(logs_agent, knowledge_agent, remediation_agent, step_callback)
     initial_state: IncidentState = {"incident": incident}
     incident.status = IncidentStatus.INVESTIGATING
 

@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from src.api.routes import router
+from src.api.websocket import ws_router
 from src.infrastructure.logger import get_logger, setup_logging
 from src.infrastructure.telemetry import setup_telemetry
 
@@ -26,3 +27,4 @@ app = FastAPI(
 )
 
 app.include_router(router)
+app.include_router(ws_router)
